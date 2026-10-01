@@ -40,6 +40,9 @@ class InterfazEstego:
         self._crear_pestana_extraer()
         self._crear_pestana_analizar()
 
+        self.tabla_insercion_txt = None
+        self.tabla_extraccion_txt = None
+
     @staticmethod
     def _cargar_foto(ruta):
         imagen = Image.open(ruta).convert("RGB")
@@ -82,7 +85,13 @@ class InterfazEstego:
         self.boton_guardar = ttk.Button(
             acciones, text="Guardar imagen", command=self._guardar_imagen, state="disabled"
         )
-        self.boton_guardar.pack(side="left")
+        self.boton_guardar.pack(side="left", padx=(0, 8))
+        self.boton_tabla_ocultar = ttk.Button(
+            acciones, text="Descargar tabla de bytes comparativos",
+            command=lambda: self._guardar_tabla(self.tabla_insercion_txt, "tabla_insercion.txt"),
+            state="disabled",
+        )
+        self.boton_tabla_ocultar.pack(side="left")
         self.estado_ocultar = ttk.Label(panel, text="")
         self.estado_ocultar.grid(row=6, column=0, sticky="w", pady=(10, 0))
 
@@ -156,6 +165,7 @@ class InterfazEstego:
             )
             self.boton_insertar.configure(state="normal")
             self.boton_guardar.configure(state="disabled")
+            self.boton_tabla_ocultar.configure(state="disabled")
         except Exception as error:
             messagebox.showerror("No se pudo abrir la imagen", str(error), parent=self.root)
 
@@ -167,6 +177,7 @@ class InterfazEstego:
             self.extractor = self._cargar_foto(ruta)
             self.ruta_extraer.configure(text=ruta)
             self._mostrar_vista_previa(self.vista_extraer, self.extractor.img)
+            self.boton_tabla_extraer.configure(state="disabled")
         except Exception as error:
             messagebox.showerror("No se pudo abrir la imagen", str(error), parent=self.root)
 
@@ -208,15 +219,42 @@ class InterfazEstego:
             )
             return
 
-        bits = self.codificador.texto_a_bits(mensaje + "\x00")
+        # bits = self.codificador.texto_a_bits(mensaje + "\x00")
+        # if len(bits) > len(self.codificador.lista_pixeles):
+        #     messagebox.showerror("Mensaje demasiado largo", "El mensaje no cabe en esta imagen.", parent=self.root)
+        #     return
+
+        # originales = self.codificador.lista_pixeles[:8] 
+        # self.codificador.encriptar(bits)
+        # modificados = self.codificador.lista_pixeles[:8]
+        # print("Byte | Original (dec / bin) | Bit | Modificado (dec / bin)")
+        # for i in range(8):
+        #     o, m = originales[i], modificados[i]
+        #     print(f"{i+1:>4} | {o:>3} / {o:08b}      |  {bits[i]}  | {m:>3} / {m:08b}")
+
+        # self._mostrar_vista_previa(self.vista_ocultar, self.codificador.img)
+        # self.estado_ocultar.configure(text="Mensaje insertado. Guarda la imagen para conservar el resultado.")
+        # self.boton_guardar.configure(state="normal")
+
+        texto = mensaje + "\x00"
+        bits = self.codificador.texto_a_bits(texto)
         if len(bits) > len(self.codificador.lista_pixeles):
             messagebox.showerror("Mensaje demasiado largo", "El mensaje no cabe en esta imagen.", parent=self.root)
             return
 
         self.codificador.encriptar(bits)
+        n = len(bits)
+        originales = list(self.codificador.img_original.tobytes()[:n])
+        modificados = self.codificador.lista_pixeles[:n]
+        self.tabla_insercion_txt = GeneradorInforme.tabla_insercion(
+            originales, modificados, texto, self.ruta_ocultar.cget("text")
+        )
+        self.boton_tabla_ocultar.configure(state="normal")
+
         self._mostrar_vista_previa(self.vista_ocultar, self.codificador.img)
         self.estado_ocultar.configure(text="Mensaje insertado. Guarda la imagen para conservar el resultado.")
         self.boton_guardar.configure(state="normal")
+
 
     def _guardar_imagen(self):
         if self.codificador is None:
@@ -244,6 +282,10 @@ class InterfazEstego:
         self.resultado_extraer.delete("1.0", "end")
         self.resultado_extraer.insert("1.0", mensaje)
         self.resultado_extraer.configure(state="disabled")
+        self.tabla_extraccion_txt = GeneradorInforme.tabla_extraccion(
+            self.extractor.lista_pixeles, mensaje, self.ruta_extraer.cget("text")
+        )
+        self.boton_tabla_extraer.configure(state="normal")
 
     def _analizar_imagen(self):
         if self.imagen_analisis is None:
@@ -288,6 +330,23 @@ class InterfazEstego:
 
     def _guardar_pdf(self):
         self._generar_informe("pdf")
+
+    def _guardar_tabla(self, texto, nombre_sugerido):
+        if not texto:
+            return
+        ruta = filedialog.asksaveasfilename(
+            parent=self.root, title="Guardar tabla de bytes",
+            defaultextension=".txt", initialfile=nombre_sugerido,
+            filetypes=[("Texto", "*.txt")],
+        )
+        if not ruta:
+            return
+        try:
+            with open(ruta, "w", encoding="utf-8") as f:
+                f.write(texto)
+            messagebox.showinfo("Tabla guardada", f"Archivo guardado en:\n{ruta}", parent=self.root)
+        except Exception as error:
+            messagebox.showerror("No se pudo guardar la tabla", str(error), parent=self.root)
 
     def _exportar_resumen(self):
         self._generar_informe("txt")

@@ -111,8 +111,12 @@ Es un **indicio estadístico**, no una prueba definitiva: una imagen sin mensaje
 .
 ├── main.py                        # Punto de entrada
 ├── requirements.txt               # Dependencias
+└── assets/
+    ├── images.png
+    └── images_c.png
+└── claseBitWise/
+    └── claseBitWise.py            # Operaciones a nivel de bit
 └── claseEstego/
-    ├── ClaseBitwise.py            # Operaciones a nivel de bit
     ├── ClaseFoto.py               # Carga de imagen, inserción y extracción
     ├── AnalizadorChiCuadrado.py   # Ataque estadístico χ²
     ├── GeneradorInforme.py        # Exportación a PDF / TXT

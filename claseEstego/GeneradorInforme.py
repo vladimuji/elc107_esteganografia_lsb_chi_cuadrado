@@ -8,6 +8,10 @@ from claseEstego.AnalizadorChiCuadrado import AnalizadorChiCuadrado
 
 
 class GeneradorInforme:
+
+
+    MAX_BYTES_TABLA = 8000
+
     def __init__(self, resultados, output_file=None):
         self.results = resultados
         self.output_file = output_file
@@ -49,3 +53,74 @@ class GeneradorInforme:
 
         documento.save()
         return destino
+
+    @staticmethod
+    def _etiqueta_caracter(c):
+        return "\\x00 (marca de fin)" if c == "\x00" else repr(c)
+
+    @staticmethod
+    def tabla_insercion(originales, modificados, texto_insertado, imagen="No especificada"):
+        """Tabla original vs modificado. texto_insertado incluye el \\x00 final."""
+        canales = "RGB"
+        bits = "".join(f"{ord(c):08b}" for c in texto_insertado)
+        n = min(len(bits), GeneradorInforme.MAX_BYTES_TABLA)
+        cambiados, dif_max = 0, 0
+        l = [
+            "TABLA DE BYTES COMPARATIVOS - INSERCION LSB",
+            f"Imagen: {imagen}",
+            f"Mensaje: {texto_insertado.rstrip(chr(0))!r} ({len(texto_insertado)} caracteres con marca de fin)",
+            f"Bytes modificados en la tabla: {n} ({n // 8} caracteres, 1 bit por byte)",
+            "",
+            "Byte | Pix/Canal | Original (dec / bin) | Bit | Modificado (dec / bin) | Resultado",
+            "-" * 80,
+        ]
+        for i in range(n):
+            if i % 8 == 0:
+                k = i // 8
+                c = texto_insertado[k]
+                l.append(f">> Caracter {k + 1}: {GeneradorInforme._etiqueta_caracter(c)}"
+                         f" | ASCII {ord(c)} | bits {ord(c):08b}")
+            o, m = originales[i], modificados[i]
+            cambiados += o != m
+            dif_max = max(dif_max, abs(o - m))
+            res = "Coincidia" if o == m else "Cambio"
+            l.append(f"{i + 1:>4} | {i // 3 + 1:>6}/{canales[i % 3]}  | {o:>3} / {o:08b}"
+                     f"      |  {bits[i]}  | {m:>3} / {m:08b}         | {res}")
+            if i % 8 == 7:
+                l.append("-" * 80)
+        l += ["", f"Bytes que cambiaron: {cambiados} de {n}",
+              f"Bytes que ya coincidian: {n - cambiados} de {n}",
+              f"Diferencia maxima en un byte: {dif_max}"]
+        if len(bits) > n:
+            l.append(f"(Tabla truncada a {n} bytes de {len(bits)})")
+        return "\n".join(l) + "\n"
+
+    @staticmethod
+    def tabla_extraccion(datos, mensaje, imagen="No especificada"):
+        """Tabla con el LSB leido de cada byte. Cubre el mensaje y su marca de fin."""
+        canales = "RGB"
+        n = min(8 * (len(mensaje) + 1), len(datos), GeneradorInforme.MAX_BYTES_TABLA)
+        l = [
+            "TABLA DE BYTES - EXTRACCION LSB",
+            f"Imagen: {imagen}",
+            f"Mensaje recuperado: {mensaje!r} ({len(mensaje)} caracteres + marca de fin)",
+            f"Bytes leidos en la tabla: {n}",
+            "",
+            "Byte | Pix/Canal | Valor (dec / bin) | LSB extraido",
+            "-" * 60,
+        ]
+        acum = ""
+        for i in range(n):
+            b = datos[i]
+            bit = b & 1
+            acum += str(bit)
+            l.append(f"{i + 1:>4} | {i // 3 + 1:>6}/{canales[i % 3]}  | {b:>3} / {b:08b}"
+                     f"   |      {bit}")
+            if len(acum) == 8:
+                v = int(acum, 2)
+                l.append(f">> {acum} = {v} = {GeneradorInforme._etiqueta_caracter(chr(v))}")
+                l.append("-" * 60)
+                acum = ""
+        if 8 * (len(mensaje) + 1) > n:
+            l.append(f"(Tabla truncada a {n} bytes)")
+        return "\n".join(l) + "\n"
